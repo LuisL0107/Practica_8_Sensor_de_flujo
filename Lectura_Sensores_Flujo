@@ -1,0 +1,62 @@
+const int FLOW_PIN = 2;
+volatile unsigned long pulseCount = 0;
+unsigned long lastTime = 0;
+float totalLitros = 0.0;
+const float K = 7.5;  // Factor de calibración (pulsos por litro)
+
+// Variables para estadísticas
+float flowMin = 9999.0;
+float flowMax = 0.0;
+float flowSum = 0.0;
+int sampleCount = 0;
+
+void pulseCounter() {
+  pulseCount++;
+}
+
+void setup() {
+  Serial.begin(9600);
+  pinMode(FLOW_PIN, INPUT_PULLUP);
+  attachInterrupt(digitalPinToInterrupt(FLOW_PIN), pulseCounter, RISING);
+  
+  Serial.println("=== MEDIDOR DE FLUJO ===");
+  Serial.println("Tiempo(s)\tFlujo(L/min)\tFlujo(m3/min)\tTotal(L)");
+  Serial.println("----------------------------------------");
+}
+
+void loop() {
+  if (millis() - lastTime >= 1000) {
+    // Deshabilitar interrupción temporalmente
+    detachInterrupt(digitalPinToInterrupt(FLOW_PIN));
+    
+    // Leer y resetear contador
+    unsigned long pulses = pulseCount;
+    pulseCount = 0;
+    lastTime = millis();
+    
+    // Calcular flujos
+    float flowLPM = pulses / K;
+    float flowM3 = flowLPM / 1000.0;
+    totalLitros += flowLPM / 60.0;  // L/s a L total
+    
+    // Actualizar estadísticas (ignorar primer valor si es 0)
+    if (pulses > 0) {
+      if (flowLPM < flowMin) flowMin = flowLPM;
+      if (flowLPM > flowMax) flowMax = flowLPM;
+      flowSum += flowLPM;
+      sampleCount++;
+    }
+    
+    // Imprimir datos en formato tabla
+    Serial.print(millis() / 1000.0, 1);
+    Serial.print("\t");
+    Serial.print(flowLPM, 3);
+    Serial.print("\t");
+    Serial.print(flowM3, 6);
+    Serial.print("\t");
+    Serial.println(totalLitros, 4);
+    
+    // Reactivar interrupción
+    attachInterrupt(digitalPinToInterrupt(FLOW_PIN), pulseCounter, RISING);
+  }
+}
