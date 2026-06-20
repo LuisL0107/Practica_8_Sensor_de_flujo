@@ -1,0 +1,43 @@
+// Variable volátil porque se modifica dentro de la interrupción
+volatile unsigned long pulseCount = 0; 
+unsigned long lastTime = 0;
+
+// Pin digital 2 para la señal del sensor
+const byte sensorPin = 2; 
+
+// Función de interrupción (ISR): se ejecuta cada vez que el sensor manda un pulso
+void countPulses() {
+  pulseCount++;
+}
+
+void setup() {
+  Serial.begin(9600);
+  
+  // Eliminación de ruido
+  pinMode(sensorPin, INPUT_PULLUP); 
+  
+  // Configura la interrupción en el pin 2, llamando a 'countPulses' en cada flanco de subida (RISING)
+  attachInterrupt(digitalPinToInterrupt(sensorPin), countPulses, RISING);
+  
+  Serial.println("--- Sistema de caracterización listo ---");
+}
+
+void loop() {
+  // Cada 1000 milisegundos (1 segundo) calculamos los pulsos recibidos
+  if (millis() - lastTime >= 1000) {
+    
+    // Interrupción para leer y reiniciar
+    detachInterrupt(digitalPinToInterrupt(sensorPin));
+    
+    unsigned long pulses = pulseCount/7.5; // Registro de valor
+    pulseCount = 0;                    // Reiniciamos el contador para el siguiente segundo
+    
+    attachInterrupt(digitalPinToInterrupt(sensorPin), countPulses, RISING);
+    
+    lastTime = millis();
+    
+    // Mostramos los pulsos por segundo en el Monitor Serie
+    Serial.print("Pulsos por segundo (L/Min): ");
+    Serial.println(pulses);
+  }
+}
