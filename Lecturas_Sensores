@@ -1,0 +1,81 @@
+// ===== CONFIGURACIÓN =====
+const int FLOW_PIN = 2;
+const float K = 7.5;
+const unsigned long SAMPLE_INTERVAL = 1000;
+
+// ===== VARIABLES =====
+volatile unsigned long pulseCount = 0;
+unsigned long lastTime = 0;
+float totalLitros = 0.0;
+float flowMin = 9999.0, flowMax = 0.0, flowSum = 0.0;
+int sampleCount = 0;
+
+// ===== INTERRUPCIÓN =====
+void IRAM_ATTR pulseCounter() {
+  pulseCount++;
+}
+
+// ===== FUNCIONES =====
+void leerYCalcular() {
+  detachInterrupt(digitalPinToInterrupt(FLOW_PIN));
+  
+  unsigned long pulses = pulseCount;
+  pulseCount = 0;
+  lastTime = millis();
+  
+  float flowLPM = pulses / K;
+  float flowM3 = flowLPM / 1000.0;
+  totalLitros += flowLPM / 60.0;
+  
+  if (pulses > 0) {
+    if (flowLPM < flowMin) flowMin = flowLPM;
+    if (flowLPM > flowMax) flowMax = flowLPM;
+    flowSum += flowLPM;
+    sampleCount++;
+  }
+  
+  // Formato CSV: tiempo,flowLPM,flowM3,totalLitros
+  Serial.print(millis() / 1000.0, 1);
+  Serial.print(",");
+  Serial.print(flowLPM, 3);
+  Serial.print(",");
+  Serial.print(flowM3, 6);
+  Serial.print(",");
+  Serial.println(totalLitros, 4);
+  
+  attachInterrupt(digitalPinToInterrupt(FLOW_PIN), pulseCounter, RISING);
+}
+
+// ===== SETUP =====
+void setup() {
+  Serial.begin(9600);
+  pinMode(FLOW_PIN, INPUT_PULLUP);
+  attachInterrupt(digitalPinToInterrupt(FLOW_PIN), pulseCounter, RISING);
+  
+  // Cabecera CSV (compatible con MATLAB)
+  Serial.println("tiempo,flujo_LPM,flujo_m3,Total_L");
+}
+
+// ===== LOOP =====
+void loop() {
+  if (millis() - lastTime >= SAMPLE_INTERVAL) {
+    leerYCalcular();
+  }
+  
+  // Comandos especiales
+  if (Serial.available()) {
+    char cmd = Serial.read();
+    if (cmd == 's' || cmd == 'S') {
+      Serial.print("STATS,");
+      Serial.print(sampleCount);
+      Serial.print(",");
+      Serial.print(flowMin, 3);
+      Serial.print(",");
+      Serial.print(flowMax, 3);
+      Serial.print(",");
+      Serial.print(flowSum / sampleCount, 3);
+      Serial.print(",");
+      Serial.println(totalLitros, 4);
+    }
+  }
+}
